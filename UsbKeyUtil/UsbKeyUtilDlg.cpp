@@ -67,7 +67,7 @@ CUsbKeyUtilDlg::CUsbKeyUtilDlg(CWnd* pParent /*=NULL*/)
 	, v_maxUserPinRetries(15)
 	, v_soErrorMaxMSg(_T("当前错误次数（0）"))
 	, v_userErrorMaxMSg(_T("当前错误次数（0）"))
-	, v_hardwareSerialNumber(_T(""))
+	, v_hardwareSerialNumber(_T("等待设备连接"))
 	, v_soPinOld(_T(""))
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
@@ -104,6 +104,7 @@ BEGIN_MESSAGE_MAP(CUsbKeyUtilDlg, CDHtmlDialog)
 	ON_EN_CHANGE(userPin, &CUsbKeyUtilDlg::OnEnChangeuserpin)
 	ON_EN_CHANGE(maxSoPinRetries, &CUsbKeyUtilDlg::OnEnChangemaxsopinretries)
 	ON_EN_CHANGE(maxUserPinRetries, &CUsbKeyUtilDlg::OnEnChangemaxuserpinretries)
+	ON_BN_CLICKED(IDC_BUTTON1, &CUsbKeyUtilDlg::OnBnClickedButton1)
 END_MESSAGE_MAP()
 
 
@@ -204,67 +205,158 @@ HRESULT CUsbKeyUtilDlg::OnButtonCancel(IHTMLElement* /*pElement*/)
 	return S_OK;
 }
 
+
+//提示错误信息
+void ShowErrInfo(EPAS_STATUS retval)
+{
+	switch (retval)
+	{
+		//case FT_SUCCESS:
+		//printf("Success!\n");
+		//return;
+	case FT_CANNOT_OPEN_DRIVER:
+		AfxMessageBox(_T("Err: 无法打开设备！failed to open the driver!"));
+		break;
+	case FT_INVALID_DRVR_VERSION:
+		AfxMessageBox(_T("Err: 无效的驱动程序版本！Invalid driver version!"));
+		break;
+	case FT_INVALID_COMMAND:
+		AfxMessageBox(_T("Err: 命令无效！Invalid command!"));
+		break;
+	case FT_ACCESS_DENIED:
+		AfxMessageBox(_T("Err: 拒绝访问（密码错误）！access denied!"));
+		break;
+	case FT_UNIT_NOT_FOUND:
+		AfxMessageBox(_T("Err: unit was not found!"));
+		break;
+	case FT_DEVICE_REMOVED:
+		AfxMessageBox(_T("Err: 该设备被删除！the device was removed!"));
+		break;
+	case FT_COMMUNICATIONS_ERROR:
+		AfxMessageBox(_T("Err: 通讯异常终止！communication terminated abnormally!"));
+		break;
+	case FT_DIR_NOT_FOUND:
+		AfxMessageBox(_T("Err: 该目录没有被发现！The directory was not found!"));
+		break;
+	case FT_FILE_NOT_FOUND:
+		AfxMessageBox(_T("Err: 该文件没有被发现！The file was not found!"));
+		break;
+	case FT_MEM_CORRUPT:
+		AfxMessageBox(_T("Err: 令牌内的内存已损坏！Memory inside the token was corrupted!"));
+		break;
+	case FT_INTERNAL_HW_ERROR:
+		AfxMessageBox(_T("Err: 发生内部硬件错误！Internal hardware error occured!"));
+		break;
+	case FT_INVALID_RESP_SIZE:
+		AfxMessageBox(_T("Err: 从令牌收到的异常响应！Abnormal response received from the token!"));
+		break;
+	case FT_PIN_EXPIRED:
+		AfxMessageBox(_T("Err: PIN重试计数器寄存器返回零！The PIN retry counter register return zero!"));
+		break;
+	case FT_ALREADY_EXISTS:
+		AfxMessageBox(_T("Err: 该项目已经存在！The item already exist!"));
+		break;
+	case FT_NOT_ENOUGH_MEMORY:
+		AfxMessageBox(_T("Err: 内存不足以执行命令！Insufficient memory to perform the command!"));
+		break;
+	case FT_INVALID_PARAMETER:
+		AfxMessageBox(_T("Err: 无效的参数被分配给该功能！Invalid parameter was assigned to the function!"));
+		break;
+	case FT_INPUT_TOO_LONG:
+		AfxMessageBox(_T("Err: 输入数据的长度太长了！The length of the input data is too long!"));
+		break;
+	case FT_INVALID_FILE_SELECTED:
+		AfxMessageBox(_T("Err: 所选文件无效！The selected file is invalid!"));
+		break;
+	case FT_DEVICE_IN_USE:
+		AfxMessageBox(_T("Err: 该设备目前正在被另一个应用程序使用！The device is currently used by another application!"));
+		break;
+	case FT_INVALID_API_VERSION:
+		AfxMessageBox(_T("Err: API库的版本无效！The version of the API library is invalid!"));
+		break;
+	case FT_TIME_OUT_ERROR:
+		AfxMessageBox(_T("Err: 操作超时！The operation time out!"));
+		break;
+	case FT_ITEM_NOT_FOUND:
+		AfxMessageBox(_T("Err: 该项目没有被发现！The item was not found!"));
+		break;
+	case FT_COMMAND_ABORTED:
+		AfxMessageBox(_T("Err: 命令异常中止！Command aborted abnormally!"));
+		break;
+	case FT_INVALID_STATUS:
+		AfxMessageBox(_T("Err: 从令牌收到无效的返回值！Invalid return value received from the token!"));
+		break;
+	default:
+		AfxMessageBox(_T("Err: 发生未知错误！Unknown error occured!"));
+		break;
+	}
+}
+
+
 EPAS_HANDLE g_hToken = NULL;
 EPAS_STATUS retval = FT_SUCCESS;
 void CUsbKeyUtilDlg::OnBnClickedstartinit()
 {
 	// 将各控件中的数据保存到相应的变量   
 	UpdateData(TRUE);
-	v_maxSoPinRetries = v_maxSoPinRetries + v_maxUserPinRetries;
 
-
-	printf("Create Context:");
-	retval = epas_CreateContext(&g_hToken, 0, EPAS_API_VERSION);
-	if (FT_SUCCESS != retval)
-	{
-		return;
-	}
-	printf("Open device:");
-	retval = epas_OpenDevice(g_hToken, EPAS_OPEN_FIRST, NULL);
-	if (FT_SUCCESS != retval)
-	{
-		return;
-	}
-
-
-	EPAS_ACCESSINFO aInfo = { 0 };
-	retval = epas_GetProperty(g_hToken, EPAS_PROP_ACCESSINFO, NULL, &aInfo, sizeof(aInfo));
-	if (FT_SUCCESS != retval)
-	{
-		return;
-	}
-	v_maxSoPinRetries = aInfo.ucMaxSoPinRetries;
-	v_maxUserPinRetries = aInfo.ucMaxUserPinRetries;
-	v_soErrorMaxMSg.Format(_T("当前错误次数 （%d）"), aInfo.ucMaxSoPinRetries-aInfo.ucCurSoPinCounter);
-	v_userErrorMaxMSg.Format(_T("当前错误次数 （%d）"), aInfo.ucMaxUserPinRetries-aInfo.ucCurUserPinCounter);
-	long sn[2] = { 0 };
-	retval = epas_GetProperty(g_hToken, EPAS_PROP_SERNUM, NULL, sn, sizeof(sn));
-	if (FT_SUCCESS != retval)
-	{
-		return;
-	}
-	v_hardwareSerialNumber.Format(_T("设备序列号：%08lX%08lX"),sn[1],sn[0]); 
-
-	char oldPin[80] = { 0 };
-	char newPin[80] = { 0 };
-
-
+	char * oldSoPin;
+	LPCTSTR p = v_soPinOld.GetBuffer(0);
+	v_soPinOld.ReleaseBuffer();
+	oldSoPin= new char[v_soPinOld.GetLength() + 1];
+	strcpy_s(oldSoPin, v_soPinOld.GetLength() + 1, CT2CA(p));
 	
-//	retval = epas_ChangeCode(
-//		g_hToken, EPAS_CHANGE_SO_PIN,
-//		(unsigned char*)oldPin,
-//		soOldLen,
-//		(unsigned char*)newPin,
-//		soNewLen);
-//	if (FT_SUCCESS != retval)
-//	{
-//		return;
-//	}
+	char * newSoPin;
+	LPCTSTR p2 = v_soPin.GetBuffer(0);
+	v_soPin.ReleaseBuffer();
+	newSoPin = new char[v_soPin.GetLength() + 1];
+	strcpy_s(newSoPin, v_soPin.GetLength() + 1, CT2CA(p2));
+
+	//修改超级管理员密码
+	retval = epas_ChangeCode(
+		g_hToken, EPAS_CHANGE_SO_PIN,
+		(unsigned char*)oldSoPin,
+		strlen(oldSoPin),
+		(unsigned char*)newSoPin,
+		strlen(newSoPin));
+	if (FT_SUCCESS != retval)
+	{
+		ShowErrInfo(retval);
+		return;
+	}
+
+	char tBuf[32] = { 0 };
+	tBuf[0] = 1;
+	//格式化设备
+	retval = epas_SetProperty(g_hToken, EPAS_PROP_INIT_TOKEN, NULL, tBuf, strlen((char*)tBuf));
+	if (FT_SUCCESS != retval)
+	{
+		ShowErrInfo(retval);
+		return;
+	}
 
 
-
+	//解锁设备-并重置用户密码
+	char * newUserPin;
+	LPCTSTR p3 = v_userPin.GetBuffer(0);
+	v_userPin.ReleaseBuffer();
+	newUserPin = new char[v_userPin.GetLength() + 1];
+	strcpy_s(newUserPin, v_userPin.GetLength() + 1, CT2CA(p3));
+	   
+	retval = epas_ChangeCode(g_hToken,
+		EPAS_UNBLOCK_USER_PIN,
+		(unsigned char*)newSoPin,
+		strlen(newSoPin),
+		(unsigned char*)newUserPin,
+		strlen(newUserPin));
+	if (FT_SUCCESS != retval)
+	{
+		ShowErrInfo(retval);
+		return;
+	}
 	// 根据各变量的值更新相应的控件。和的编辑框会显示m_editSum的值   
 	UpdateData(FALSE);
+	AfxMessageBox(_T("初始化完成！Success！"));
 }
 
 
@@ -302,3 +394,54 @@ void CUsbKeyUtilDlg::OnEnChangemaxuserpinretries()
 {
 	UpdateData(TRUE);
 }
+
+
+
+
+//打开设备
+void CUsbKeyUtilDlg::OnBnClickedButton1()
+{
+
+	//创建上下文
+	retval = epas_CreateContext(&g_hToken, 0, EPAS_API_VERSION);
+	if (FT_SUCCESS != retval)
+	{
+		ShowErrInfo(retval);
+		return;
+	}
+	//打开设备
+	retval = epas_OpenDevice(g_hToken, EPAS_OPEN_FIRST, NULL);
+	if (FT_SUCCESS != retval)
+	{
+		ShowErrInfo(retval);
+		return;
+	}
+
+	//取得设备信息
+	EPAS_ACCESSINFO aInfo = { 0 };
+	retval = epas_GetProperty(g_hToken, EPAS_PROP_ACCESSINFO, NULL, &aInfo, sizeof(aInfo));
+	if (FT_SUCCESS != retval)
+	{
+		ShowErrInfo(retval);
+		return;
+	}
+	v_maxSoPinRetries = aInfo.ucMaxSoPinRetries;
+	v_maxUserPinRetries = aInfo.ucMaxUserPinRetries;
+	v_soErrorMaxMSg.Format(_T("当前错误次数 （%d）"), aInfo.ucMaxSoPinRetries - aInfo.ucCurSoPinCounter);
+	v_userErrorMaxMSg.Format(_T("当前错误次数 （%d）"), aInfo.ucMaxUserPinRetries - aInfo.ucCurUserPinCounter);
+	long sn[2] = { 0 };
+	retval = epas_GetProperty(g_hToken, EPAS_PROP_SERNUM, NULL, sn, sizeof(sn));
+	if (FT_SUCCESS != retval)
+	{
+		ShowErrInfo(retval);
+		return;
+	}
+	v_hardwareSerialNumber.Format(_T("设备已连接！设备序列号（ %08lX%08lX ）"), sn[1], sn[0]);
+	UpdateData(False);
+	
+
+	//::MessageBox(NULL, _T("XXX"), _T("警告"), MB_OK);
+}
+
+
+

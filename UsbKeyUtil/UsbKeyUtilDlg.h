@@ -52,4 +52,5 @@ public:
 	afx_msg void OnEnChangeuserpin();
 	afx_msg void OnEnChangemaxsopinretries();
 	afx_msg void OnEnChangemaxuserpinretries();
+	afx_msg void OnBnClickedButton1();
 };
