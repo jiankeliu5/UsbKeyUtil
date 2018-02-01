@@ -227,7 +227,7 @@ void ShowErrInfo(EPAS_STATUS retval)
 		AfxMessageBox(_T("Err: 拒绝访问（密码错误）！access denied!"));
 		break;
 	case FT_UNIT_NOT_FOUND:
-		AfxMessageBox(_T("Err: unit was not found!"));
+		AfxMessageBox(_T("Err: 请先插入USBKEY设备！unit was not found!"));
 		break;
 	case FT_DEVICE_REMOVED:
 		AfxMessageBox(_T("Err: 该设备被删除！the device was removed!"));
@@ -303,9 +303,9 @@ void CUsbKeyUtilDlg::OnBnClickedstartinit()
 	char * oldSoPin;
 	LPCTSTR p = v_soPinOld.GetBuffer(0);
 	v_soPinOld.ReleaseBuffer();
-	oldSoPin= new char[v_soPinOld.GetLength() + 1];
+	oldSoPin = new char[v_soPinOld.GetLength() + 1];
 	strcpy_s(oldSoPin, v_soPinOld.GetLength() + 1, CT2CA(p));
-	
+
 	char * newSoPin;
 	LPCTSTR p2 = v_soPin.GetBuffer(0);
 	v_soPin.ReleaseBuffer();
@@ -342,7 +342,7 @@ void CUsbKeyUtilDlg::OnBnClickedstartinit()
 	v_userPin.ReleaseBuffer();
 	newUserPin = new char[v_userPin.GetLength() + 1];
 	strcpy_s(newUserPin, v_userPin.GetLength() + 1, CT2CA(p3));
-	   
+
 	retval = epas_ChangeCode(g_hToken,
 		EPAS_UNBLOCK_USER_PIN,
 		(unsigned char*)newSoPin,
@@ -354,7 +354,86 @@ void CUsbKeyUtilDlg::OnBnClickedstartinit()
 		ShowErrInfo(retval);
 		return;
 	}
-	// 根据各变量的值更新相应的控件。和的编辑框会显示m_editSum的值   
+
+	//创建目录
+	EPAS_DIRINFO di = { 0 };
+	di.ulID = 0x1000;
+	di.ulFlags = 0;
+	//目录名
+	char * path = "YH";
+	retval = epas_CreateDir(g_hToken, EPAS_CREATE_AUTO_ID, (unsigned char*)path, NULL, &di, sizeof(di));
+	if (FT_SUCCESS != retval)
+	{
+		ShowErrInfo(retval);
+		return;
+	}
+	//创建文件1
+	EPAS_FILEINFO fi1 = { 0 };
+	fi1.ulID= 0x1;
+	fi1.ulFileSize = 16;
+	fi1.ucFileType = EPAS_FILETYPE_MD5;
+	fi1.ucReadAccess = EPAS_ACCESS_NONE;
+	fi1.ucCryptAccess = EPAS_ACCESS_USER;
+	fi1.ucWriteAccess = EPAS_ACCESS_ANYONE;
+	retval = epas_CreateFile(g_hToken, 0, &fi1, sizeof(fi1));
+	if (FT_SUCCESS != retval)
+	{
+		ShowErrInfo(retval);
+		return;
+	}
+
+	unsigned long ulText_Len = 0;
+	unsigned char pucDigest[16] = { 0 };
+	unsigned char key1[16] = { 0 };
+	unsigned char key2[16] = { 0 };
+	//生成密文
+	MD5_HMAC(NULL, ulText_Len, (unsigned char*)newSoPin, 4, key1, key2, pucDigest);
+	unsigned long ulFileSize = 16;
+	unsigned long ulWritten;
+	//写文件1
+	retval = epas_Write(g_hToken, 0, 0, key1, ulFileSize, &ulWritten);
+	if (FT_SUCCESS != retval)
+	{
+		ShowErrInfo(retval);
+		return;
+	}
+
+	//创建文件2
+	fi1.ulID = 0x2;
+	retval = epas_CreateFile(g_hToken, 0, &fi1, sizeof(fi1));
+	if (FT_SUCCESS != retval)
+	{
+		ShowErrInfo(retval);
+		return;
+	}
+	//写文件2
+	retval = epas_Write(g_hToken, 0, 0, key2, ulFileSize, &ulWritten);
+	if (FT_SUCCESS != retval)
+	{
+		ShowErrInfo(retval);
+		return;
+	}
+
+	//关闭led状态灯
+	retval = epas_SetProperty(g_hToken, EPAS_PROP_LED_OFF, NULL, NULL, 0);
+	if (FT_SUCCESS != retval)
+	{
+		ShowErrInfo(retval);
+		return;
+	}
+
+	//关闭设备
+	epas_CloseDevice(g_hToken);
+	//删除上下文
+	epas_DeleteContext(g_hToken);
+
+
+	v_soErrorMaxMSg = _T("当前错误次数 （0）");
+	v_userErrorMaxMSg= _T("当前错误次数 （0）");
+	v_hardwareSerialNumber = _T("等待设备连接");
+
+
+	// 根据各变量的值更新相应的控件
 	UpdateData(FALSE);
 	AfxMessageBox(_T("初始化完成！Success！"));
 }
@@ -437,8 +516,16 @@ void CUsbKeyUtilDlg::OnBnClickedButton1()
 		return;
 	}
 	v_hardwareSerialNumber.Format(_T("设备已连接！设备序列号（ %08lX%08lX ）"), sn[1], sn[0]);
+
+	//打开led状态灯
+	retval = epas_SetProperty(g_hToken, EPAS_PROP_LED_ON, NULL, NULL, 0);
+	if (FT_SUCCESS != retval)
+	{
+		ShowErrInfo(retval);
+		return;
+	}
 	UpdateData(False);
-	
+
 
 	//::MessageBox(NULL, _T("XXX"), _T("警告"), MB_OK);
 }
