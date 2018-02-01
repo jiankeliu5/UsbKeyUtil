@@ -36,6 +36,9 @@
     <ClInclude Include="UsbKeyConfig.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\..\..\..\..\work\Include\FT_ND_API.h">
+      <Filter>源文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="UsbKeyUtil.cpp">

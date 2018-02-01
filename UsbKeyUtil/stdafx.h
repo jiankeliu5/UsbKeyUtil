@@ -39,7 +39,7 @@
 
 
 #include <afxdhtml.h>        // HTML ¶Ô»°¿ò
-
+#include <FT_ND_API.h>
 
 #ifdef _UNICODE
 #if defined _M_IX86

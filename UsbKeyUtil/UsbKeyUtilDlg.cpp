@@ -187,12 +187,7 @@ HRESULT CUsbKeyUtilDlg::OnButtonCancel(IHTMLElement* /*pElement*/)
 	return S_OK;
 }
 
-
-
-
-
-
-
+EPAS_HANDLE g_hToken = NULL;
 
 void CUsbKeyUtilDlg::OnBnClickedstartinit()
 {
@@ -206,5 +201,79 @@ void CUsbKeyUtilDlg::OnBnClickedstartinit()
 
 	// 根据各变量的值更新相应的控件。和的编辑框会显示m_editSum的值   
 	UpdateData(FALSE);
-	OnCancel();
+
+
+
+	EPAS_STATUS retval = FT_SUCCESS;
+	printf("Create Context:");
+	retval = epas_CreateContext(&g_hToken, 0, EPAS_API_VERSION);
+
+	if (FT_SUCCESS != retval)
+		return ;
+
+
+
+	printf("Open device:");
+	retval = epas_OpenDevice(g_hToken, EPAS_OPEN_FIRST, NULL);
+	if (FT_SUCCESS != retval)
+		return ;
+	EPAS_VERSIONINFO version = { 0 };
+
+	retval = epas_GetProperty(g_hToken, EPAS_PROP_VERSIONINFO,
+		NULL, &version, sizeof(EPAS_VERSIONINFO));
+	if (FT_SUCCESS == retval)
+	{
+		printf("\n=>> Firmware Version: %d.%02d\n=>> Product Code: %X",
+			version.ucFwVerMajor,
+			version.ucFwVerMinor,
+			version.ucProductCode);
+	}
+
+
+	unsigned long capa = 0;
+	retval = epas_GetProperty(g_hToken, EPAS_PROP_CAPABILITIES,
+		NULL, &capa, sizeof(capa));
+	if (FT_SUCCESS == retval)
+	{
+		printf("\n=>> Capabilities: %X", capa);
+	}
+
+	unsigned long memSize = 0;
+	retval = epas_GetProperty(g_hToken, EPAS_PROP_MEM_SIZE, NULL,
+		&memSize, sizeof(memSize));
+	if (FT_SUCCESS == retval)
+	{
+		printf("\n=>> Total memory size: %d byte%s",
+			memSize, memSize > 1 ? "s" : "");
+	}
+
+	EPAS_SYSINFO sysInfo = { 0 };
+	retval = epas_GetProperty(g_hToken, EPAS_PROP_SYSINFO,
+		NULL, &sysInfo, sizeof(EPAS_SYSINFO));
+	if (FT_SUCCESS == retval)
+	{
+		printf("\n=>> Free memory space: %d byte%s",
+			sysInfo.ulFreeSpace, sysInfo.ulFreeSpace > 1 ? "s" : "");
+		printf("\n=>> Max directory levels: %d", sysInfo.ucMaxDirLevels);
+		printf("\n=>> File system type: %d", sysInfo.ucFileSysType);
+	}
+
+	char fName[EPAS_FRIENDLY_NAME_SIZE + 1] = { 0 };
+	retval = epas_GetProperty(g_hToken, EPAS_PROP_FRIENDLY_NAME,
+		NULL, fName, EPAS_FRIENDLY_NAME_SIZE);
+	if (FT_SUCCESS == retval)
+	{
+		fName[EPAS_FRIENDLY_NAME_SIZE] = 0;
+		printf("\n=>> Friendly token name: %s", fName);
+	}
+
+	unsigned long sn[2] = { 0 };
+	retval = epas_GetProperty(g_hToken, EPAS_PROP_SERNUM, NULL, sn, sizeof(sn));
+	if (FT_SUCCESS == retval)
+	{
+		printf("\n=>> Hardware serial number: 0x%08lX%08lX", sn[1], sn[0]);
+	}
+
+
+	//OnCancel();
 }
