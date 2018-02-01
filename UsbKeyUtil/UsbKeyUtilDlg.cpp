@@ -6,6 +6,12 @@
 #include "UsbKeyUtil.h"
 #include "UsbKeyUtilDlg.h"
 #include "afxdialogex.h"
+#include <iostream>
+#include <string>
+#include <sstream>
+using namespace std;
+
+
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -19,12 +25,12 @@ class CAboutDlg : public CDialogEx
 public:
 	CAboutDlg();
 
-// 对话框数据
+	// 对话框数据
 #ifdef AFX_DESIGN_TIME
 	enum { IDD = IDD_ABOUTBOX };
 #endif
 
-	protected:
+protected:
 	virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV 支持
 
 // 实现
@@ -57,10 +63,12 @@ CUsbKeyUtilDlg::CUsbKeyUtilDlg(CWnd* pParent /*=NULL*/)
 	: CDHtmlDialog(IDD_USBKEYUTIL_DIALOG, IDR_HTML_USBKEYUTIL_DIALOG, pParent)
 	, v_soPin(_T(""))
 	, v_userPin(_T(""))
-	, v_maxSoPinRetries(0)
-	, v_maxUserPinRetries(0)
+	, v_maxSoPinRetries(15)
+	, v_maxUserPinRetries(15)
 	, v_soErrorMaxMSg(_T("当前错误次数（0）"))
 	, v_userErrorMaxMSg(_T("当前错误次数（0）"))
+	, v_hardwareSerialNumber(_T(""))
+	, v_soPinOld(_T(""))
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
 }
@@ -82,11 +90,20 @@ void CUsbKeyUtilDlg::DoDataExchange(CDataExchange* pDX)
 	DDV_MinMaxInt(pDX, v_maxUserPinRetries, 1, 15);
 	DDX_Text(pDX, soErrorMaxMsg, v_soErrorMaxMSg);
 	DDX_Text(pDX, userErrorMaxMsg, v_userErrorMaxMSg);
+	DDX_Text(pDX, HardwareSerialNumber, v_hardwareSerialNumber);
+	DDX_Text(pDX, soPinOld, v_soPinOld);
+	DDV_MaxChars(pDX, v_soPinOld, 15);
 }
 
 BEGIN_MESSAGE_MAP(CUsbKeyUtilDlg, CDHtmlDialog)
 	ON_WM_SYSCOMMAND()
 	ON_BN_CLICKED(startInit, &CUsbKeyUtilDlg::OnBnClickedstartinit)
+	ON_BN_CLICKED(exitSystem, &CUsbKeyUtilDlg::OnBnClickedexitsystem)
+	ON_EN_CHANGE(soPinOld, &CUsbKeyUtilDlg::OnEnChangesopinold)
+	ON_EN_CHANGE(soPin, &CUsbKeyUtilDlg::OnEnChangesopin)
+	ON_EN_CHANGE(userPin, &CUsbKeyUtilDlg::OnEnChangeuserpin)
+	ON_EN_CHANGE(maxSoPinRetries, &CUsbKeyUtilDlg::OnEnChangemaxsopinretries)
+	ON_EN_CHANGE(maxUserPinRetries, &CUsbKeyUtilDlg::OnEnChangemaxuserpinretries)
 END_MESSAGE_MAP()
 
 
@@ -188,92 +205,100 @@ HRESULT CUsbKeyUtilDlg::OnButtonCancel(IHTMLElement* /*pElement*/)
 }
 
 EPAS_HANDLE g_hToken = NULL;
-
+EPAS_STATUS retval = FT_SUCCESS;
 void CUsbKeyUtilDlg::OnBnClickedstartinit()
 {
 	// 将各控件中的数据保存到相应的变量   
 	UpdateData(TRUE);
 	v_maxSoPinRetries = v_maxSoPinRetries + v_maxUserPinRetries;
-	v_soErrorMaxMSg = "当前错误次数（2）";
-	v_userErrorMaxMSg = "当前错误次数（3）";
+
+
+	printf("Create Context:");
+	retval = epas_CreateContext(&g_hToken, 0, EPAS_API_VERSION);
+	if (FT_SUCCESS != retval)
+	{
+		return;
+	}
+	printf("Open device:");
+	retval = epas_OpenDevice(g_hToken, EPAS_OPEN_FIRST, NULL);
+	if (FT_SUCCESS != retval)
+	{
+		return;
+	}
+
+
+	EPAS_ACCESSINFO aInfo = { 0 };
+	retval = epas_GetProperty(g_hToken, EPAS_PROP_ACCESSINFO, NULL, &aInfo, sizeof(aInfo));
+	if (FT_SUCCESS != retval)
+	{
+		return;
+	}
+	v_maxSoPinRetries = aInfo.ucMaxSoPinRetries;
+	v_maxUserPinRetries = aInfo.ucMaxUserPinRetries;
+	v_soErrorMaxMSg.Format(_T("当前错误次数 （%d）"), aInfo.ucMaxSoPinRetries-aInfo.ucCurSoPinCounter);
+	v_userErrorMaxMSg.Format(_T("当前错误次数 （%d）"), aInfo.ucMaxUserPinRetries-aInfo.ucCurUserPinCounter);
+	long sn[2] = { 0 };
+	retval = epas_GetProperty(g_hToken, EPAS_PROP_SERNUM, NULL, sn, sizeof(sn));
+	if (FT_SUCCESS != retval)
+	{
+		return;
+	}
+	v_hardwareSerialNumber.Format(_T("设备序列号：%08lX%08lX"),sn[1],sn[0]); 
+
+	char oldPin[80] = { 0 };
+	char newPin[80] = { 0 };
+
+
+	
+//	retval = epas_ChangeCode(
+//		g_hToken, EPAS_CHANGE_SO_PIN,
+//		(unsigned char*)oldPin,
+//		soOldLen,
+//		(unsigned char*)newPin,
+//		soNewLen);
+//	if (FT_SUCCESS != retval)
+//	{
+//		return;
+//	}
 
 
 
 	// 根据各变量的值更新相应的控件。和的编辑框会显示m_editSum的值   
 	UpdateData(FALSE);
+}
 
 
-
-	EPAS_STATUS retval = FT_SUCCESS;
-	printf("Create Context:");
-	retval = epas_CreateContext(&g_hToken, 0, EPAS_API_VERSION);
-
-	if (FT_SUCCESS != retval)
-		return ;
+void CUsbKeyUtilDlg::OnBnClickedexitsystem()
+{
+	OnCancel();
+}
 
 
-
-	printf("Open device:");
-	retval = epas_OpenDevice(g_hToken, EPAS_OPEN_FIRST, NULL);
-	if (FT_SUCCESS != retval)
-		return ;
-	EPAS_VERSIONINFO version = { 0 };
-
-	retval = epas_GetProperty(g_hToken, EPAS_PROP_VERSIONINFO,
-		NULL, &version, sizeof(EPAS_VERSIONINFO));
-	if (FT_SUCCESS == retval)
-	{
-		printf("\n=>> Firmware Version: %d.%02d\n=>> Product Code: %X",
-			version.ucFwVerMajor,
-			version.ucFwVerMinor,
-			version.ucProductCode);
-	}
+void CUsbKeyUtilDlg::OnEnChangesopinold()
+{
+	UpdateData(TRUE);
+}
 
 
-	unsigned long capa = 0;
-	retval = epas_GetProperty(g_hToken, EPAS_PROP_CAPABILITIES,
-		NULL, &capa, sizeof(capa));
-	if (FT_SUCCESS == retval)
-	{
-		printf("\n=>> Capabilities: %X", capa);
-	}
-
-	unsigned long memSize = 0;
-	retval = epas_GetProperty(g_hToken, EPAS_PROP_MEM_SIZE, NULL,
-		&memSize, sizeof(memSize));
-	if (FT_SUCCESS == retval)
-	{
-		printf("\n=>> Total memory size: %d byte%s",
-			memSize, memSize > 1 ? "s" : "");
-	}
-
-	EPAS_SYSINFO sysInfo = { 0 };
-	retval = epas_GetProperty(g_hToken, EPAS_PROP_SYSINFO,
-		NULL, &sysInfo, sizeof(EPAS_SYSINFO));
-	if (FT_SUCCESS == retval)
-	{
-		printf("\n=>> Free memory space: %d byte%s",
-			sysInfo.ulFreeSpace, sysInfo.ulFreeSpace > 1 ? "s" : "");
-		printf("\n=>> Max directory levels: %d", sysInfo.ucMaxDirLevels);
-		printf("\n=>> File system type: %d", sysInfo.ucFileSysType);
-	}
-
-	char fName[EPAS_FRIENDLY_NAME_SIZE + 1] = { 0 };
-	retval = epas_GetProperty(g_hToken, EPAS_PROP_FRIENDLY_NAME,
-		NULL, fName, EPAS_FRIENDLY_NAME_SIZE);
-	if (FT_SUCCESS == retval)
-	{
-		fName[EPAS_FRIENDLY_NAME_SIZE] = 0;
-		printf("\n=>> Friendly token name: %s", fName);
-	}
-
-	unsigned long sn[2] = { 0 };
-	retval = epas_GetProperty(g_hToken, EPAS_PROP_SERNUM, NULL, sn, sizeof(sn));
-	if (FT_SUCCESS == retval)
-	{
-		printf("\n=>> Hardware serial number: 0x%08lX%08lX", sn[1], sn[0]);
-	}
+void CUsbKeyUtilDlg::OnEnChangesopin()
+{
+	UpdateData(TRUE);
+}
 
 
-	//OnCancel();
+void CUsbKeyUtilDlg::OnEnChangeuserpin()
+{
+	UpdateData(TRUE);
+}
+
+
+void CUsbKeyUtilDlg::OnEnChangemaxsopinretries()
+{
+	UpdateData(TRUE);
+}
+
+
+void CUsbKeyUtilDlg::OnEnChangemaxuserpinretries()
+{
+	UpdateData(TRUE);
 }

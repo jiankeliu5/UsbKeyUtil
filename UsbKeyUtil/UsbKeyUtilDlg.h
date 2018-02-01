@@ -44,4 +44,12 @@ public:
 	int v_maxUserPinRetries;
 	CString v_soErrorMaxMSg;
 	CString v_userErrorMaxMSg;
+	afx_msg void OnBnClickedexitsystem();
+	CString v_hardwareSerialNumber;
+	CString v_soPinOld;
+	afx_msg void OnEnChangesopinold();
+	afx_msg void OnEnChangesopin();
+	afx_msg void OnEnChangeuserpin();
+	afx_msg void OnEnChangemaxsopinretries();
+	afx_msg void OnEnChangemaxuserpinretries();
 };
