@@ -215,7 +215,6 @@
     <ClCompile Include="UsbKeyUtilDlg.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="README.md" />
     <None Include="res\UsbKeyUtil.rc2" />
     <None Include="UsbKeyUtil.htm">
       <DeploymentContent>true</DeploymentContent>

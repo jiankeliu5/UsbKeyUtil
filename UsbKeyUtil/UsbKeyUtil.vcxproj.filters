@@ -59,7 +59,6 @@
     <None Include="res\UsbKeyUtil.rc2">
       <Filter>资源文件</Filter>
     </None>
-    <None Include="README.md" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="UsbKeyUtil.rc">
